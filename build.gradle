@@ -48,7 +48,7 @@ apply plugin: 'io.spring.dependency-management'
 // *********************************************************************************************************************
 // Standard project properties. These are used as default values by some assembly and release task, e.g. jar
 // See gradle.properties and settings.gradle, e.g.
-//project.name - Property defined in settings.gradle, overriding the default used by Gradle which is based on proj dir
+//project.name - Property defined in settings.gradle, overriding default used by Gradle which is based on project dir
 //project.version - Property defined in gradle.properties
 
 // Extra user-defined project properties
@@ -67,6 +67,8 @@ repositories {
 dependencies {
   // Compile-time dependencies
   compile("org.springframework.boot:spring-boot-starter-web")
+  compile("com.amazonaws.serverless:aws-serverless-java-container-spring:[${awsServerlessJavaContainerSpringMinVersion},)")
+  compile("io.symphonia:lambda-logging:${symphoniaLambdaLoggingVersion}")
 
   // Test dependencies
   testCompile("org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}")
