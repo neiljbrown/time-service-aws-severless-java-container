@@ -1,17 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AWS Serverless Spring Boot 2 API - com.neiljbrown::aws-serverless-java-container-spring-boot-starter
+Description: AWS Serverless implementation of Time service APIs - com.neiljbrown::time-service
 Globals:
   Api:
     EndpointConfiguration: REGIONAL
 
 Resources:
-  AwsServerlessJavaContainerSpringBootStarterFunction:
+  AwsServerlessJavaContainerTimeServiceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: com.neiljbrown.StreamLambdaHandler::handleRequest
+      Handler: com.neiljbrown.time.StreamLambdaHandler::handleRequest
       Runtime: java8
-      CodeUri: target/aws-serverless-java-container-spring-boot-starter-0.0.1-SNAPSHOT-lambda-package.zip
+      CodeUri: build/distributions/time-service-0.0.1-snapshot-lambda-package.zip
       MemorySize: 512
       Policies: AWSLambdaBasicExecutionRole
       Timeout: 30
@@ -23,8 +23,8 @@ Resources:
             Method: any
 
 Outputs:
-  AwsServerlessJavaContainerSpringBootStarterApi:
+  AwsServerlessJavaContainerTimeServiceGetPlatformTimeApi:
     Description: URL for application
-    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/ping'
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/v1/platform-time'
     Export:
-      Name: AwsServerlessJavaContainerSpringBootStarterApi
+      Name: AwsServerlessJavaContainerTimeServiceGetPlatformTimeApi
