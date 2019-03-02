@@ -71,11 +71,8 @@ dependencies {
   // Workaround for JUnit 5 bug. Suppress warnings output on compiling test classes reporting that classes (enums) that
   // JUnit 5 depends upon can't be found. See https://github.com/junit-team/junit5/issues/1065
   testCompileOnly("org.apiguardian:apiguardian-api:${apiguardianApiVersion}")
-
   testCompile("org.assertj:assertj-core:${assertjVersion}")
   testCompile('org.springframework.boot:spring-boot-starter-test')
-
-  // Runtime dependencies
   testRuntime("org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}")
 }
 
@@ -118,10 +115,37 @@ test {
 // Tasks
 // *********************************************************************************************************************
 
-// Custom task for running javadoc on Java classes in src/test/java
+/**
+ * Custom task for running javadoc on Java classes in src/test/java
+ */
 task javadocTests(type: Javadoc, group: "documentation" ) {
   source = sourceSets.test.allJava
   classpath = configurations.testCompile
   options.links(project.ext.javadocLinks)
   options.addBooleanOption('html5',true)
 }
+
+/**
+ * Packages this AWS serverless Java container app and its dependencies into an artefact of the same type and format 
+ * required for deploying functions to AWS Lambda.  
+ * <p>
+ * AWS Lambda requires a function (and hence this serverless Java container app)  to be packaged as a zip file that 
+ * has a Lambda specific dir structure layout (similar to a WAR). For more details see the AWS Lambda Dev Guide > 
+ * Building Lambda Functions with Java > AWS Lambda Deployment Package in Java.
+ */
+task packageForAwsLambda(type: Zip) {
+  classifier = 'lambda-package'
+  // Add Java classes
+  from compileJava
+  // Add resources in src/main/resources
+  from processResources
+  // Add dependent libs, required at runtime
+  into('lib') {
+    from(configurations.runtimeClasspath) {
+      // Exclude embedded Tomcat libs provided by Spring Boot. The AWS serverless Java container lib provides Jetty.
+      exclude 'tomcat-embed-*'
+    }
+  }
+}
+
+assemble.dependsOn packageForAwsLambda
