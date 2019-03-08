@@ -9,7 +9,7 @@ Resources:
   AwsServerlessJavaContainerTimeServiceFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: com.neiljbrown.time.StreamLambdaHandler::handleRequest
+      Handler: com.neiljbrown.service.time.StreamLambdaHandler::handleRequest
       Runtime: java8
       CodeUri: build/distributions/time-service-0.0.1-snapshot-lambda-package.zip
       MemorySize: 512
