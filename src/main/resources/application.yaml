@@ -28,3 +28,16 @@ spring.profiles.active: local
 info.app.name: Time service
 info.app.description: Sample backend service providing web APIs supporting (date and) time related functionality.
 info.app.version: 0.0.1
+
+---
+
+# **********************************************************************************************************************
+# Overrides for the local (dev) environment, activated using Spring bean profile 'dev'
+# **********************************************************************************************************************
+spring.profiles: local
+
+# Logging
+# -------
+# Suppress logging to console (stdout) for selective classes to workaround bug (fragility) of AWS SAM local CLI used to
+# component test application. See unfixed https://github.com/awslabs/aws-serverless-java-container/issues/134
+logging.level.org.springframework.jmx.export.annotation.AnnotationMBeanExporter: WARN
