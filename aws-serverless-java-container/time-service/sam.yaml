@@ -6,7 +6,7 @@ Globals:
     EndpointConfiguration: REGIONAL
 
 Resources:
-  AwsServerlessJavaContainerTimeServiceFunction:
+  ServiceContainerFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: com.neiljbrown.service.time.StreamLambdaHandler::handleRequest
@@ -20,11 +20,11 @@ Resources:
           Type: Api
           Properties:
             Path: /{proxy+}
-            Method: any
+            Method: GET
 
 Outputs:
-  AwsServerlessJavaContainerTimeServiceGetPlatformTimeApi:
+  GetPlatformTimeApi:
     Description: URL for application
-    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/v1/platform-time'
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Stage/v1/platform-time'
     Export:
-      Name: AwsServerlessJavaContainerTimeServiceGetPlatformTimeApi
+      Name: GetPlatformTimeApi
