@@ -1,30 +1,45 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: AWS Serverless implementation of Time service APIs - com.neiljbrown::time-service
+
+# Define properties common to one or more Serverless Function and APIs.
 Globals:
   Api:
     EndpointConfiguration: REGIONAL
 
+# Declare the AWS resources to include in the CloudFormation (CF) stack.
 Resources:
+  # Lambda function that creates the Java app/service's Spring container (managed beans) and caches it across requests
   ServiceContainerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: com.neiljbrown.service.time.StreamLambdaHandler::handleRequest
       Runtime: java8
+      # Path of Lambda function's request handler.
+      Handler: com.neiljbrown.service.time.StreamLambdaHandler::handleRequest
+      # The location of the Lambda function code.
       CodeUri: build/distributions/time-service-0.0.1-snapshot-lambda-package.zip
       MemorySize: 512
       Policies: AWSLambdaBasicExecutionRole
       Timeout: 30
+      # Event sources to attach to this function.
       Events:
+        # A web API event source for this function - Creates/deploys an AWS API Gateway endpoint for the function
+        # (with a unique dedicated hostname) which handles HTTP requests (with any URL path or method) by invoking
+        # this Lambda function passing through (tunnelling) the request and response.
+        # API endpoints of all such web API event sources are collated into an AWS API Gateway API named 'ServerlessRestApi'.
         GetResource:
           Type: Api
           Properties:
             Path: /{proxy+}
-            Method: GET
+            Method: any
 
+# Declares output values from the created CF stack for import into other stacks, return in CF describe stack calls, or
+# view in AWS CF console.
 Outputs:
-  GetPlatformTimeApi:
-    Description: URL for application
+  # URL of AWS API Gateway endpoint that is created for the Lambda function - hostname is generated, unique and varies
+  # per AWS region. This output value has been made endpoint specific by appending URL path of Get Platform Time API.
+  GetPlatformTimeApiUrl:
+    Description: URL of the Get Platform Time API, for the app instance deployed in the Stage env.
     Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Stage/v1/platform-time'
     Export:
-      Name: GetPlatformTimeApi
+      Name: GetPlatformTimeApiUrl
