@@ -40,4 +40,5 @@ spring.profiles: local
 # -------
 # Suppress logging to console (stdout) for selective classes to workaround bug (fragility) of AWS SAM local CLI used to
 # component test application. See unfixed https://github.com/awslabs/aws-serverless-java-container/issues/134
+logging.level.root: WARN
 logging.level.org.springframework.jmx.export.annotation.AnnotationMBeanExporter: WARN
