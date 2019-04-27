@@ -1,15 +1,121 @@
-# Time service sample app
+# Time service sample app - Re-engineered to run on AWS Lambda using AWS Serverless Java Container Library  
 
-## Overview
-This project contains a sample REST API service known as the 'Time service'. It's a simple, but realistic backend 
-service that provides a couple of external REST APIs, built using Java and Spring Boot, and packaged & deployed as 
-Docker container. 
+## 1) Overview
+This project contains a sample backend (micro) service built using (Java and) Spring Boot, that has been re-engineered 
+to run on the AWS Lambda platform,  using a solution based on the 
+[AWS Serverless Java Container Library](https://github.com/awslabs/aws-serverless-java-container).  
 
-### Application software stack
-The service is built on a software stack of Java (8.x), Spring Boot 2.1.x / Spring (5.1.x) and Tomcat (9) web 
-container (Servlet API 4.0).
+## 2) Background & Motivation
+The project is part of a broader series of my research into solutions for deploying and running 
+enterprise apps/services, built using Spring Boot, on the AWS Lambda platform - i.e. solutions for Spring-based AWS Lambda 
+functions. 
 
-### Dev Environment Setup / Prerequisites
+Deploying and running services on Function-as-a-Service (FaaS) platforms like AWS Lambda has some compelling 
+potential benefits for appropriate use-cases, including true, low-latency elastic scalability 
+and significant cost-savings based on scaling to zero. 
+
+The Spring application framework (and more recently Spring Boot) encourages and accelerates building modern, flexible 
+enterprise apps that run on JVM, that are easy to test, by abstracting away generic code ('plumbing') for integrating 
+an app with its libraries and APIs; using familiar design/programming patterns (IoC/DI, proxies, Template methods etc); 
+and providing valuable features (declarative transaction management, environment specific config, etc).
+ 
+However, functions that require a JVM to be launched and rely on a stateful Spring IoC container (Application Context) 
+don't (at first glance) appear to be a naturally good fit for running on FaaS platforms. How can developers and their 
+business' continue to benefit from building enterprise apps using Spring, and also now profit from running those 
+apps on a FaaS platform? Which, if any, use-cases does it make sense to deploy a FaaS solution built using Spring? What 
+solutions are available to support the combination of these technologies, and how do they compare in terms of 
+developer usability/experience and quality (performance, etc)?    
+
+## 3) Project Origins    
+The project is based on a combination of two other  projects.
+
+The project is seeded from a clone of the ['Time service'](https://github.com/neiljbrown/time-service) - a sample 
+backend (micro) service, providing one or more REST APIs, built using (Java and) Spring Boot, that is packaged and 
+deployed as a Docker container. 
+
+The cloned Time service has then been re-engineered to run on AWS Lambda using an AWS serverless platform integration 
+solution known as  the AWS Serverless Java Container library. The [AWS Serverless Java Container library's _starter_ app](https://github.com/neiljbrown/aws-serverless-java-container-spring-boot-starter) 
+was used as a reference/guide for how to make the changes required to integrate the library, and package and deploy the 
+app. 
+
+This project's git commit logs provide full details of the steps required to port a Docker-container based service, 
+such as the Time service to run on AWS Lambda using the AWS Serverless Java Container library.
+
+## 4) Spring-based AWS Lambda Function Solution - AWS Serverless Java Container Library  
+
+### 4.1) Solution Overview
+The AWS Serverless Java Container Library is an AWS provided solution for running stateful Java web-apps built using 
+popular frameworks, such as Spring, on AWS Lambda, in an efficient manner (avoiding the need to re-launch the app  / 
+restart the Java web container across every execution of a Lambda function).
+
+The solution entails packaging and deploying a Java web-app as an AWS serverless app - an app that is built and 
+deployed using a combination of the AWS API Gateway and AWS Lambda services. The AWS API Gateway is used to proxy 
+HTTP requests to the app/service's web API endpoints in order to make use of AWS Lambda's support for invoking Lambda 
+functions in response to HTTP request events received via the AWS API Gateway service.
+
+The AWS Serverless Java Container Library provides a Spring (Boot) specific implementation of the AWS LambdaContainerHandler 
+class that provides integration ('glue') code to facilitate running a Spring web-app on AWS Lambda, in the context 
+of a single AWS Lambda function. The LambdaContainerHandler class knows how to bootstrap a Spring web-app (create and 
+load its web application context). It also provides a request handler method that a Lambda function can delegate to. 
+This handler method adapts an invocation of a Lambda function, that originates from an HTTP request event received via 
+an AWS API Gateway endpoint, to the Servlet API used by Spring MVC. For example, a Lambda function's 
+RequestStreamHandler's InputStream is deserialised to an AwsProxyRequest, which is then adapted/converted to the Servlet 
+API's HttpServletRequest, before then dispatching the request to app's Spring MVC DispatcherServlet. The 
+HttpServletResponse which is generated by an Spring MVC web-app is then adapted to an AwsProxyResponse, which is 
+serialsied to the Lambda function's OutputStream.
+    
+To utilise this solution for running a Spring-based function or function-based app, an application needs to provide a 
+relatively simple implementation of a single AWS Lambda function - a [RequestStreamHandler](https://www.javadoc.io/doc/com.amazonaws/aws-lambda-java-core/1.2.0) - that is responsible for the following  - 
+* *Creating and caching the LambdaContainerHandler (and Spring container)* - When the AWS Lambda function class is 
+first loaded by the JVM, it must create an instance of the library's LambdaContainerHandler (described above), the process 
+for which includes bootstrapping the Spring web app (creating and loading the WebApplicationContext, and launching the embedded Servlet 
+web container). The LambdaContainerHandler instance is then cached in a static variable. This ensures that the overhead 
+of bootstrapping the Spring web app is only incurred on the first Lambda function request since the supporting JVM was 
+launched (i.e. on a Lambda function 'cold-start', and not subsequent 'warm' executions).
+* *Delegating function invocations to the LambdaContainerHandler* - Invocations of the function are handled by simply
+  delegating them to the aforementioned handler method of the LambdaContainerHandler, which as described above takes 
+  care of adapting the requests to Spring MVC. 
+
+The implementation of the Lambda function written to support this application (the ported Time-service) can be found 
+in class com.neiljbrown.service.time.StreamLambdaHandler.       
+
+### 4.2) Summary of Changes to Build, Test and Package and Deploy App
+This section lists changes to the way in which an app/service that is ported to run on AWS Lambda, using the 
+AWS Serverless Container library, is built, tested, packaged and deployed. For more details see the 'Changes to 
+support AWS Lambda Integration' subheadings in each of the later, corresponding sections in this readme, which have 
+been updated since being originally written for the cloned, Docker-container based version of the service. 
+
+1) [Application software stack](#5-application-software-stack). 
+
+2) [Dev Environment Setup / Prerequisites](#6-dev-environment-setup--prerequisites).
+
+3) [Automated Tests](#9-automated-tests).  
+
+4) [Building the service](#10-building-the-service)
+
+5) [Running the service](#11-running-the-service).
+
+6) [Local End-to-end (Integration) Testing with AWS Lambda (New)](#12-local-end-to-end-integration-testing-with-aws-lambda-new).
+
+7) [Deploying the service to AWS (Lambda and API Gateway) (New)](#13-deploying-the-service-to-aws-lambda-and-api-gateway-new) - This section replaces instructions for deploying
+ the service to any one of a number of public platforms that supports Docker containers (e.g. AWS Elastic Beanstalk, 
+ etc). 
+
+
+## 5) Application software stack
+The service is built on a software stack of Java (8.x), Spring Boot 2.1.x / Spring (5.1.x) ~~and Tomcat (9) web 
+container~~ (Servlet API 4.0).-
+
+### 5.1) Changes to support AWS Lambda Integration 
+To support porting the app to run on AWS Lambda, using the Serverless Container Library, the aforementioned software 
+stack is largely unchanged, however a few changes are necessary and some new restrictions do apply - 
+- *Utilised web container* - The Serverless Container Library provides its own embedded Servlet web container, which
+ is currently Jetty. The embedded Servlet web container that is provided by the Spring Boot web starter POM (which 
+ defaults to Tomcat) has to be excluded. (It is not  currently known whether the AWS library supports other web containers).  
+- *Supported Java version* - The utilised version of Java remains unchanged, but it's worth noting that it now has to 
+be supported by the AWS Lambda platform/service. Whereas previously, when deploying  the app/service as a Docker container there was no such restriction - we were free to use any version of Java.  
+
+## 6) Dev Environment Setup / Prerequisites
 To build, test, package, deploy and run this project locally you will need a dev env comprising the following  -    
   
 *1) JDK* - Install the correct major version (see above) of the JDK used by this service to support compiling the 
@@ -19,40 +125,104 @@ source code and running the app.
 gradle wrapper - ./gradlew - it will automatically download and install the required version of Gradle. See below for 
 more details.  
   
-*3) Docker* - The service is packaged and deployed as a Docker image. This requires a Docker (client and 
+### 6.1) Changes to support AWS Lambda Integration
+*3) Docker* - ~~The service is packaged and deployed as a Docker image. This requires a Docker (client and 
 server/engine) to be installed in the dev ('local') environment. For non-Linux (i.e. Mac OS X, or Windows) dev 
-environments, install Docker using the corresponding native app (e.g. Docker for Mac).
+environments, install Docker using the corresponding native app (e.g. Docker for Mac).~~ - The app is no longer 
+packaged and deployed as a Docker image. However, Docker still needs to be installed to support local integration 
+testing of the ported app/service in conjunction with AWS services. (See later section below for more details).
 
-## Source Code
-The project uses the standard Maven directory layout for a Java app. Java source code and resoures can be found in the 
-src/main/java and src/main/resources folders respectively. Automated test code and resources can be found in  
-the src/test/java and src/test/resources folders.  
+*4) AWS SAM CLI* - The AWS Serverless Application Model (SAM) command line interface needs to be installed to support 
+local integration testing of the app in conjunction with AWS Lambda and AWS API Gateway services (as described in later 
+section). The CLI installation instructions are signposted from 
+[AWS SAM project home page](https://aws.amazon.com/serverless/sam/). Currently they can be found  in the 
+[AWS Serverless Application Model Developer Guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html).
 
-## Building the service
-The service is built, tested and released using Gradle. For a list of available build tasks enter the following 
-command in the project root directory:
+Note, several different installation options are supported (including npm, Python's pip, etc). But on Mac OS X, after 
+some frustration trying other options, I found that using the Homebrew package was by far the simples and most 
+reliable. Example commands -  
+
+```
+$ brew tap aws/tap
+$ brew install aws-sam-cli
+```
+
+*5) AWS CLI* - The broader AWS CLI needs to be installed to support deploying the application using AWS CloudFormation.
+
+## 7) Source Code
+The project uses the standard Maven directory layout for a Java app. Java source code and resources can be found in the 
+src/main/java and src/main/resources folders respectively. Automated test code and resources can be found in  the 
+src/test/java and src/test/resources folders.
+
+## 8) Service Build Script
+Building, testing and releasing of the service is automated using a Gradle 'build' script. For a list of available 
+build tasks enter the following command in the project root directory:
 
 ```./gradlew tasks```
 
+For more details see build.gradle in the project root directory.  
+
+## 9) Automated Tests
 Automated unit tests and fine-grained intra-service integration tests (that entail launching the Spring container) are 
-implemented in JUnit (5) and AssertJ . To execute the unit tests from the command line, enter the following command:
+implemented in JUnit (5) and AssertJ. To execute the unit tests from the command line, enter the following command:
 
 ```./gradlew test```
 
+### 9.1) Component Testing
+Component tests are types of automated tests in which the functionality of the service's web APIs are tested 
+end-to-end  <i>within</i> the app/service, from receipt of an external HTTP request from an API client, 
+through the whole stack, including integrations with stubbed external processes, via real API clients, over the wire, 
+and generation and return of the response.
+
+Component tests are typically implemented using Spring Boot's test support for launching the production web container 
+in the context/scope of the execution of a JUnit test, e.g.  
+```java
+@ExtendWith(SpringExtension.class)
+// webEnvironment - Set to 'RANDOM_PORT' to signify that these are component tests that should launch and run in the
+// production web container (and bind to and listen on a random HTTP port).
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class MyApiComponentTest { 
+  //... 
+}
+``` 
+
+A 'service virtualisation' tool, such as WireMock, can be used to stub external remote web APIs/services.
+
+### 9.2) Changes to support AWS Lambda Integration
+After porting this app to use the AWS Serverless Java Container library, Component tests, written using the 
+@SpringBootTest approach as described in the previous section, can still be executed, however, by default they now 
+use a different implementation of Servlet/web container than what's used in production. A Spring Boot project by 
+default uses embedded Tomcat, whereas the AWS Serverless Java Container uses its own packaged embedded Jetty. As a 
+result, whilst these Components tests are still useful, they are slightly less valuable. (The tests now offer less of 
+a guarantee that the app will subsequently work as expected in when deployed & running in production using a different 
+implementation of web container).    
+
+Given that Spring Boot supports alternative types of Servlet/web container, including Jetty, this drawback could be 
+addressed by changing Boot's web starter POM so the project utilises Jetty rather than Tomcat. The version of Jetty 
+used by Boot would also need to be kept aligned with the version used by the Serverless Java Container library. 
+
+## 10) Building the service
 To assemble (compile and package) the service execute the following commands:
 
 ```./gradlew assemble```
 
 This will create an executable, fat JAR in the build/libs folder.
 
+In addition a binary distribution, in the form of a zip file is created in the build/distributions folder to support 
+deploying the application to the AWS Lambda platform/service.  
+
 To assemble the service, and additionally run the service's checks (tests and any coding standards) beforehand, use the 
 'build' task, e.g.  
 
 ```./gradlew build``` 
 
-For more details see build.gradle in the project root directory.
+### 10.1) Changes to support AWS Lambda Integration
+The above steps for assembling the service are largely unchanged, except as noted above the app/service is now 
+distributed as an AWS Lambda compatible zip file, rather than a Docker image. (Whilst the app is still 
+assembled into a Spring Boot executable, fat jar, this is only used to support local testing, and not deployment to 
+AWS Lambda). 
 
-## Running the service 
+## 11) Running the service 
 You can run the service 'in-place' (without assembling it) from your workspace using the following command:
 
 ```./gradlew bootRun```
@@ -85,5 +255,414 @@ end with a line similar to the following:
 To terminate the background process from a bash shell, use the following command - 
 
 ```kill $(ps aux | grep '[t]ime-service' | awk '{print $2}')```
+
+### 11.1) Changes to support AWS Lambda Integration
+The app/service can still be run in place, and assembled into and run as an Spring Boot executable, fat jar, using 
+the steps described above. However, the Boot jar is no longer used to support production deployment of the app to AWS 
+Lambda. (See section 'Deploying the service to AWS Lambda' below for more details). And as noted above (see 'Component 
+testing' section), running the app from the Boot jar will currently result in it using a different implementation of 
+Servlet/web container (Tomcat) than is used when the app is deployed and run in  production. (The AWS Serverless Java
+container launches its own packaged version of Jetty). Keep this in mind when writing any tests which rely on 
+launching the app via the Boot jar.       
+
+## 12) Local End-to-end (Integration) Testing with AWS Lambda (New)
+
+### 12.1) The Issue 
+Re-engineering the app/service to run on AWS Lambda using the AWS Serverless Java Container library introduces some 
+additional, new testing concerns, over and above the ones described for implementing Component tests above, that didn't 
+exist when running the service in a Docker container 
+
+Firstly, the app now contains additional code, in the form of an AWS Lambda function (specifically an implementation of 
+an AWS Lambda RequestStreamHandler). See the project's StreamLambdaHandler class. Whilst this class is fairly 
+simple, it should ideally be unit tested. However, writing such a test is not straightforward, as the 
+StreamLambdaHandler depends upon (collaborates with) the serverless library's LambdaContainerHandler, which can't be 
+mocked as it is instantiated using a static initializer block, and stored as static variable (in order to support 
+caching the instance at the JVM/class level).   
+
+Secondly, the ported app is now an AWS serverless app, meaning it depends on the AWS Lambda and AWS API Gateway 
+platform services at runtime when deployed and running in post-dev, production-like environments. Invoking the 
+service's web APIs rely upon an additional API endpoint being deployed in AWS API Gateway; and deployment and execution
+of the service's aforementioned AWS Lambda function to the AWS Lambda service. Integration with these additional 
+AWS runtimes obviously needs to be tested prior to deploying to production. However, performing such testing against 
+the real implementation of these AWS services would have a significant detrimental impact of developer productivity, 
+and would require having to re-package and re-deploy the app each time a change was made, increasing the duration 
+of the code-test feedback cycle.
+
+### 12.2) The Solution - AWS SAM Local
+AWS provide a solution to the above testing concerns. The AWS Serverless Application Model (SAM) Command Line 
+Interface (CLI) tool provides a command named 'local' that supports locally integration testing your AWS Lambda 
+function against a simulation (stub) of the AWS Lambda service (that runs in a local Docker container). The SAM local
+command also supports local integration testing of an AWS Lambda function that is invoked/triggered by an HTTP request 
+event source, by additionally launching a local simulation of an AWS API Gateway service API endpoint. 
+
+The subsections below provide specific examples for how to use the AWS SAM local command to locally integration test 
+this particular app/service with AWS Lambda. Further details of the AWS SAM local command and how to use it, 
+including additional generic examples, can be found in the following online docs: 
+* The [AWS Serverless Application Model Developer Guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html), 
+specifically the [AWS SAM CLI Command Reference section](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-command-reference.html). 
+* The [AWS SAM CLI GitHub project home page](https://github.com/awslabs/aws-sam-cli) contains a link to some Getting 
+Started guides which includes [Running and debugging serverless applications locally](https://github.com/awslabs/aws-sam-cli/blob/develop/docs/usage.md) 
+* The readme of the AWS serverless Java container library's stater app for any of the supported Java frameworks 
+contains example commands for how to use SAM local to launch a serverless app's API endpoint. A copy of the readme 
+can be found in my generated copy of the starter app for Spring Boot at [https://github.com/neiljbrown/aws-serverless-java-container-spring-boot-starter]().
+   
+### 12.3) Locally Integration Testing this service with AWS
+After installing the AWS SAM CLI, as described in section 'Dev Environment Setup / Prerequisites' above, the ported 
+service can be integration tested against AWS services using the commands provided below.
+
+This section contains instructions for manually integration testing the service. Obviously, with a bit more effort, 
+these commands and the tests could be automated. 
+
+The following commands were tested against the latest version of the SAM CLI available at time of writing  - 
+```bash
+$ sam --version
+SAM CLI, version 0.12.0
+``` 
+
+**Step 1** - First, build and package the app into the AWS Lambda compatible binary distribution zip file, as would be 
+required for a production deployment - 
+```bash
+$ ./gradlew assemble
+$ ls ./build/distributions/
+time-service-0.0.1-snapshot-lambda-package.zip
+```
+
+**Step 2** - Any changes made to the project's SAM template (sam.yaml) can be validated prior to deployment as part of 
+local integration testing, as follows -
+```bash
+$ sam validate --template sam.yaml
+2019-04-13 18:11:44 Found credentials in shared credentials file: ...
+.../time-service-aws-severless-java-container/sam.yaml is a valid SAM Template
+``` 
+
+**Step 3** - Ensure Docker (engine) is running locally. The SAM local command relies on downloading and launching a 
+Docker container to simulate the AWS Lambda service.
+
+**Step 4** - Create a new dedicated terminal (bash) session, and execute the SAM local 'start-api' command - 
+```bash
+$ sam local start-api --template sam.yaml
+``` 
+This command will attempt to launch a local web server running a simulated version (stub) of the AWS API Gateway 
+endpoint that's configured as a web API event source for the 'service container' Lambda function in the project's 
+sam.yaml. If the command is successful, it will log output similar to that shown below to the console -
+```text
+2019-04-13 18:31:27 Found credentials in shared credentials file: ...
+2019-04-13 18:31:27 Mounting ServiceContainerFunction at http://127.0.0.1:3000/{proxy+} [GET, DELETE, PUT, POST, HEAD, OPTIONS, PATCH]
+2019-04-13 18:31:27 You can now browse to the above endpoints to invoke your functions. You do not need to restart/reload SAM CLI while working on your functions, changes will be reflected instantly/automatically. You only need to restart SAM CLI if you update your AWS SAM template
+2019-04-13 18:31:27  * Running on http://127.0.0.1:3000/ (Press CTRL+C to quit)
+```
+ 
+**Step 5** - Using a REST API client of your choosing, perform a cursory, end-to-end integration test of one of the 
+service's web API endpoints, via the locally running simulation of the AWS API Gateway service. For example, from 
+another terminal (bash) session, use the following curl command to invoke this Time service's Get Platform Time API - 
+```bash
+$ curl --include http://127.0.0.1:3000/v1/platform-time
+```
+
+When the local web server simulating the AWS API Gateway endpoint, as launched by the SAM local 'start-api' command, 
+receives the API request it triggers SAM local to deploy the app's packaged Lambda function to a local simulation of the
+AWS Lambda service. (Behind the scenes this entails SAM local reading the location of the app's packaged Lambda function 
+from the SAM template (see sam.yaml property Resources:ServiceContainerFunction:Properties:CodeUri) and unpacking it to 
+a local temp directory; pulling a Docker image for the AWS Lambda stub and launching it as a Docker container; then 
+mounting the dir containing the Lambda function in the Docker container). If this is successful, logs similar to the 
+following are output to the console of the SAM local 'start-api' command -         
+```text
+2019-04-13 18:40:27 Invoking com.neiljbrown.service.time.StreamLambdaHandler::handleRequest (java8)
+2019-04-13 18:40:27 Decompressing .../build/distributions/time-service-0.0.1-snapshot-lambda-package.zip
+Fetching lambci/lambda:java8 Docker container image......
+2019-04-13 18:40:29 Mounting /private/var/folders/8b/md1n9xh92cv6ylx3gsd4hd980000gp/T/tmpesqyc0if as /var/task:ro inside runtime container
+```
+
+The above process (specifically the pulling and launch of the Docker container) may take a minute or so. 
+(**_Issue_** - Unfortunately, the SAM local command currently repeats the above steps, including restarting the Docker 
+container and redeploying your Lambda function, each time it receives a new request, which negatively impacts developer 
+productivity).   
+    
+If your Lambda function can be successfully deployed, and the API request is processed successfully end-to-end, you'll 
+see logs similar to the following output by the SAM local 'start-api' command -         
+```text
+START RequestId: 62bbdf29-8a5e-4f8c-879a-2accfe0f7136 Version: $LATEST
+END RequestId: 62bbdf29-8a5e-4f8c-879a-2accfe0f7136
+REPORT RequestId: 62bbdf29-8a5e-4f8c-879a-2accfe0f7136	Duration: 183.02 ms	Billed Duration: 200 ms	Memory Size: 512 MB	Max Memory Used: 16 MB	
+[2019-04-13 18:40:33.767] NO-REQUEST-ID INFO c.a.s.p.i.s.AwsServletContext - 1 Spring WebApplicationInitializers detected on classpath 
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::        (v2.0.5.RELEASE)
+...
+...
+2019-04-13 18:40:39 127.0.0.1 - - [13/Apr/2019 18:40:39] "HEAD /v1/platform-time HTTP/1.1" 200 -
+```
+
+(See the subsection below for an explanation and analysis of the above logs).
+
+And your REST client should receive an HTTP success response back from the API, e.g. for the above curl command -
+```text
+HTTP/1.0 200 OK
+Content-Type: application/json
+Content-Length: 35
+Server: Werkzeug/0.14.1 Python/3.7.2
+Date: Sat, 27 Apr 2019 13:48:30 GMT
+
+{"dateTime":"2019-04-27T13:48:29Z"}
+```
+  
+The has served to integration test deploying and running the service as an AWS serverless app (in which the 
+web container is launched by an AWS Lambda function), locally, avoiding the need to do a full deployment to AWS.
+    
+#### 12.4) Analysis of Logs Written During Request Processing  
+The logs that are output to the console during processing of an API request by the Lambda function, as shown in the 
+above examples, are the same as those output by the real AWS Lambda service.  They're insightful and contain some 
+useful information. 
+
+The first pair of logs, shown below, record the start and end of processing of the request, identified by a UUID. 
+```text
+START RequestId: 62bbdf29-8a5e-4f8c-879a-2accfe0f7136 Version: $LATEST
+END RequestId: 62bbdf29-8a5e-4f8c-879a-2accfe0f7136
+```
+
+The AWS Lambda service then outputs a log detailing the function's execution  time, billed duration and resource 
+usage, e.g.   
+```text
+REPORT RequestId: 62bbdf29-8a5e-4f8c-879a-2accfe0f7136	Duration: 183.02 ms	Billed Duration: 200 ms	Memory Size: 512 MB	Max Memory Used: 16 MB
+```
+In this example, the function is deployed with a RAM size of 512MB (this is configurable in sam.yaml). From a 
+resource sizing perspective it's useful to know that this function only consumed 16MB of RAM. It might therefore be 
+cheaper to deploy the Lambda function with a small RAM size of 128MB,  although this will depend on whether the 
+associated downsizing of the CPU will result in the Lambda function now taking an extra billable 100ms to run. Whilst
+it's useful to see the logged execution time ('Duration') of the Lambda function, this is specific to the local 
+environment. It's therefore still essential to performance test the Lambda function running on the real AWS Lambda 
+service, and size its resources according to findings there.
+
+The next logs output to the console are written by the app's AWS Lambda function itself - the StreamLambdaHandler 
+class, which is an implementation of AWS Lambda RequestStreamHandler. These logs report the utilised serverless 
+container library's LambdaContainerHandler loading the app's Spring container the first time a request is processed 
+after the Lambda function is launched -     
+```text
+[2019-04-13 18:40:33.767] NO-REQUEST-ID INFO c.a.s.p.i.s.AwsServletContext - 1 Spring WebApplicationInitializers detected on classpath 
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::        (v2.0.5.RELEASE)
+...
+```    
+**_Issue_** - Unfortunately, as already noted above, the SAM local command recycles the Docker container running the 
+stub of the AWS Lambda function each time a request is processed. As  a result, these integration tests do NOT 
+currently prove that the Spring container is cached and the overhead of its startup only occurred on a Lambda 
+function 'cold-start' (after the JVM hosting the Lambda function is recycled). Currently that can only be verified 
+after deploying to AWS (instructions for which are provided below).
+
+## 13) Deploying the service to AWS (Lambda and API Gateway) (New)
+This section contains instructions and examples on how to deploy the service (now re-engineered to be an AWS serverless 
+app) to AWS (API Gateway and Lambda services). (A terser set of instructions can be found in the readme of the AWS 
+serverless Java container library's stater app for any of the supported Java frameworks, a copy of which can  be 
+found in my generated copy of the starter app for Spring Boot at 
+[https://github.com/neiljbrown/aws-serverless-java-container-spring-boot-starter]()).
+
+These instructions currently rely on manually entering commands. With a bit more effort, deployment could be 
+fully automated by scripting these commands.
+
+### 13.1) Prerequisites 
+First ensure you've installed the AWS CLI using the instructions detailed in section 'Dev Environment Setup / 
+Prerequisites' above. This is needed to support deploying the service/app using AWS CloudFormation.
+
+You also need an AWS account, and account credentials (e.g. root) that have the permission to create and deploy AWS 
+resources (API Gateway endpoints and Lambda functions).  
+
+### 13.2) Step 1 - Create an S3 Bucket  
+Create an S3 bucket to which the application's binary distribution (the Lambda zip file) can subsequently be uploaded. 
+(This is required to support deploying an app using AWS CloudFormation). 
+
+The bucket can have any name, as long as it's unique, and the default new bucket settings/configs suffice.
+
+You can use either the AWS Management Console web-app or the AWS CLI. For example, to create the S3 bucket using the 
+AWS CLI, use a command similar to the following -  
+```bash
+$ aws s3api create-bucket --bucket <s3-bucket-name> --region us-east-1 --profile <your-aws-credentials-profile> 
+``` 
+where '<s3-bucket-name>' is substituted for a unique S3 bucket name e.g. <your-domain>.aws-serverless-java-container.time-service
+
+### 13.3) Step 2 - Upload Lambda Function to S3 _and_ Generate the CloudFormation (Deployment) Template
+AWS serverless apps such as this one, whose component AWS resources (e.g. API Gateway endpoints and Lambda functions), 
+and any supporting infrastructure, are declared in a SAM template (sam.yaml), can be deployed using AWS CloudFormation. 
+AWS CloudFormation supports generating a CloudFormation template from sam.yaml, which can then be used to automate 
+deploying the AWS serverless app's resources as a CloudFormation 'stack'.
+
+First assemble the app into its AWS Lambda distribution zip file. (See Gradle command in earlier section above). Then 
+use the following AWS CLI command to upload the zip file to the S3 bucket created in the previous step, and generate the 
+CloudFormation template from the app's sam.yaml  -  
+
+```bash
+$ cd  <project-root-path>
+$ aws cloudformation package \
+ --profile <your-aws-credentials-profile> \
+ --template-file sam.yaml \
+ --output-template-file output-sam.yaml \
+ --s3-bucket <s3-bucket-name> 
+```
+
+If the command is successful it will generate output similar to the following - 
+```text
+Uploading to <auto-generated-uuid-for-uploaded-package>  ...
+Successfully packaged artifacts and wrote output template to file output-sam.yaml.
+Execute the following command to deploy the packaged template
+aws cloudformation deploy --template-file <project-root-path>/output-sam.yaml --stack-name <YOUR STACK NAME>
+```
+
+The command generates a CloudFormation template (deployment descriptor) named output-sam.yaml in the current 
+directory.  This template is very similar to the source sam.yaml file. The main difference is that the 'CodeUri' 
+property which specifies the URI of the app's binary distribution zip file is re-written to point to the AWS S3 
+bucket from which the app will be deployed rather than a project's local path.
+
+If you wish, you can use the following AWS CLI command to view the Lambda zip file that has been uploaded to the S3 
+bucket  -
+```bash
+$ aws s3 ls <s3-bucket-name> --profile <your-aws-credentials-profile> --human --recurs 
+```  
+
+### 13.4) Step 3 - Deploy the app using the generated CloudFormation Template 
+Use the following AWS CLI command to deploy the app (from the S3 bucket) using the instructions in the previously 
+generated CloudFormation template -
+
+```bash
+$ aws cloudformation deploy \
+ --profile <your-aws-credentials-profile> \
+ --template-file <project-root-path>/output-sam.yaml \
+ --stack-name TimeServiceServerlessJavaContainer \
+ --capabilities CAPABILITY_IAM 
+```
+
+The command creates a new CloudFormation 'stack' named 'TimeServiceServerlessJavaContainer'. You're free to use any 
+stack name of your choosing in your account.
+
+If the command is successful it will generate output similar to the following -
+```text
+Waiting for changeset to be created..
+Waiting for stack create/update to complete
+Successfully created/updated stack - TimeServiceServerlessJavaContainer
+```
+
+The app is now fully deployed to AWS. You can use the AWS Management Console web-app to peruse exactly what has been 
+deployed. In particular, the AWS Lambda web console will show  that a (serverless) 'Application' named 
+'TimeServiceServerlessJavaContainer', comprising the AWS resources (API Gateway endpoint and Lambda function) 
+declared in sam.yaml is deployed.  You can use both the Lambda web console and the API  Gateway web console to drill 
+down and inspect each component AWS resource that has been deployed. 
+
+#### 13.4.1) AWS API Gateway Stages 
+When an AWS API Gateway endpoint is deployed using SAM it creates two Gateway stages named 'stage' and 'prod' by 
+default. At the time of writing SAM doesn't currently provide any means to customise this  behaviour. The implications
+of this is that two instances of the API endpoint are deployed, one per stage, with distinct URL's, each prefixed by a 
+URL path corresponding to the stage name - '/stage' and '/prod'   
+
+### 13.5) Step 4 - Verify Deployment and Operation of Service on AWS by Invoking Service APIs
+Use the commands below to verify that this backend service has been correctly deployed to AWS, and is accessible and 
+operating correctly when invoked in this production runtime environment.  
+
+The verification steps are based on invoking the service's 'Get Platform Time' web API via its AWS API Gateway endpoint.  
+
+#### 13.5.1) Discover Public URL of Deployed Service APIs
+First discover the public URL of the deployed web API's endpoint. (This is necessary as the URL of AWS API Gateway 
+endpoint that was created for the Lambda function comprises a generated hostname that is unique and varies per AWS 
+region). This can be achieved by describing the CloudFormation stack that was created when the app was deployed using 
+the following AWS CLI command - 
+```bash
+$ aws cloudformation describe-stacks --profile <your-aws-credentials-profile> --stack-name TimeServiceSeverlessJavaContainer 
+```
+
+The command will return a JSON representation of the CF stack that contains an array of output values (variables 
+for values generated by CF, as defined in sam.yaml) that includes the URL of AWS API Gateway endpoint in the 
+'OutputValue' of the entry in the 'Outputs' JSON array with 'OutputKey' named 'GetPlatformTimeApiUrl'. For example, if 
+the command is successful it will generate output similar to the following -    
+
+
+```JSON
+{
+    "Stacks": [
+        {
+            "StackId": "arn:aws:cloudformation:...",
+            "StackName": "TimeServiceSeverlessJavaContainer",
+            "ChangeSetId": "arn:aws:cloudformation:...",
+            "Description": "AWS Serverless implementation of Time service APIs - com.neiljbrown::time-service",
+            "CreationTime": "2019-03-15T18:25:02.147Z",
+            "LastUpdatedTime": "2019-03-15T18:25:07.835Z",
+            "RollbackConfiguration": {},
+            "StackStatus": "CREATE_COMPLETE",
+            "DisableRollback": false,
+            "NotificationARNs": [],
+            "Capabilities": [
+                "CAPABILITY_IAM"
+            ],
+            "Outputs": [
+                {
+                    "OutputKey": "GetPlatformTimeApiUrl",
+                    "OutputValue": "https://<generated-host-name>.execute-api.eu-west-1.amazonaws.com/Stage/v1/platform-time",
+                    "Description": "URL for application",
+                    "ExportName": "GetPlatformTimeApiUrl"
+                }
+            ],
+            "Tags": [],
+            "EnableTerminationProtection": false
+        }
+    ]
+} 
+```
+
+In the above example, the public URL of the Time service's Get Platform Time API (in the AWS Gateway 'Stage' 
+environment) is https://<generated-host-name>.execute-api.eu-west-1.amazonaws.com/Stage/v1/platform-time, where 
+'<generated-host-name>' is a generated value.    
+
+#### 13.5.2) Invoke Service API, Running on AWS Lambda
+Using a REST API client of your choosing, test invoking the deployed service's 'Get Platform Time' web API via its AWS 
+API Gateway endpoint. For example, from  a terminal (bash) session, use a curl command similar to the following -  
+```bash
+$ curl --include "<GetPlatformTimeApiUrl>"
+```
+where '\<GetPlatformTimeApiUrl>' is the URL discovered in the previous step. 
+
+If the app/service has been successfully deployed and is operating correctly then the API should return an HTTP 
+success response similar to the following - 
+```text
+HTTP/1.1 200 OK
+Date: Sat, 27 Apr 2019 13:45:37 GMT
+Content-Type: application/json;charset=UTF-8
+Content-Length: 35
+Connection: keep-alive
+x-amzn-RequestId: bd258dc7-68f2-11e9-b68e-2b5a476bff01
+x-amz-apigw-id: YzN4QG-uDoEFtLw=
+X-Amzn-Trace-Id: Root=1-5cc45d01-537d82ed8e696ac91d03f4ca;Sampled=0
+
+{"dateTime":"2019-04-27T13:45:37Z"}
+``` 
+
+The first request will have a latency of several seconds as it will incur an AWS  Lambda cold-start as the supporting
+Java container (including Spring) is deployed and started. However, subsequent executions should be much faster. For 
+example, as shown below, without any tuning the warm execution time for the service's Get Platform Time API is less 
+than 200ms - 
+
+```text
+$ time curl --include "https://<generated-host-name>.execute-api.eu-west-1.amazonaws.com/Stage/v1/platform-time"
+HTTP/1.1 200 OK
+Date: Sat, 27 Apr 2019 13:53:28 GMT
+Content-Type: application/json;charset=UTF-8
+Content-Length: 35
+Connection: keep-alive
+x-amzn-RequestId: d5f11985-68f3-11e9-a22e-5170544e663e
+x-amz-apigw-id: YzPB3HpuDoEFfkw=
+X-Amzn-Trace-Id: Root=1-5cc45ed8-5f79edf0f5e0a5a713d03014;Sampled=0
+
+{"dateTime":"2019-04-27T13:53:28Z"}
+real	0m0.167s
+user	0m0.017s
+sys	0m0.011s
+```
+ 
+
+End.
 
 --
